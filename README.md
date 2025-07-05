@@ -1,4 +1,4 @@
-# FADAGI Farm API Specification
+# Fadagi Farm API Specification
 
 ## Overview
 This repository contains the API specification for Fadagi Farm's backend services. It defines the endpoints, request/response formats, and authentication mechanisms.
