@@ -10,8 +10,8 @@ const port = 3000;
 
 const swaggerDocument = YAML.load(path.join(__dirname, 'fadagi-farm.yaml'));
 
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.listen(port, () => {
-    console.log(`Swagger UI running at http://localhost:${port}/api-docs`);
+    console.log(`Swagger UI running at http://localhost:${port}/docs`);
 });
