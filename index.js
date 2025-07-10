@@ -11,7 +11,7 @@ const port = process.env.PORT || 3000;
 
 const apiVersion = process.env.API_VERSION;
 
-const swaggerDocument = YAML.load(path.join(__dirname, `${apiVersion}.yaml`));
+const swaggerDocument = YAML.load(path.join(__dirname, `/api/${apiVersion}.yaml`));
 
 app.use(`/api/${apiVersion}`, swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
