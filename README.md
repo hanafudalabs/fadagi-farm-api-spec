@@ -1,26 +1,55 @@
-# Fadagi Farm API Specification
+# Fadagi Farm API
 
 ## Overview
-This repository contains the API specification for Fadagi Farm's backend services. It defines the endpoints, request/response formats, and authentication mechanisms.
+
+This repository contains the backend API services for the Fadagi Farm B2B cattle investment platform. It is built with [Nuxt 3](https://nuxt.com/) in integrated server mode, using [Prisma](https://www.prisma.io/) as the ORM.
+
+The project defines all necessary endpoints, handles request/response logic, and manages authentication mechanisms.
+
+## Project Structure & Features
+
+The API is designed based on a detailed **[OpenAPI Specification](/api/)**, which outlines all endpoints for different user roles (Admin and Investor).
+
+Key features include:
+- User Authentication (Registration & Login)
+- Cattle Management (for Admins)
+- Investment Portfolio Management (for Investors)
+- Savings Account Management (for Investors)
+- Transaction Verification and Monitoring
+
+For a complete and detailed list of features to be implemented, please see our **[Project Backlog](./BACKLOG.md)**.
 
 ## Requirements
-- Node.js 18+
-- npm 9+
 
-## Installation
-1. Clone this repository
-2. Run `npm install` to install dependencies
+- Node.js 18+
+- A running MySQL database instance
+
+## Installation & Setup
+
+1.  **Clone this repository:**
+    ```bash
+    git clone https://github.com/hanafudalabs/fadagi-farm-api-spec.git
+    cd fadagi-farm-api-spec
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+
+3.  **Setup environment variables:**
+    -   Copy the example file: `cp .env-example .env`
+    -   Edit the `.env` file and set your `DATABASE_URL` and other required variables.
+
+4.  **Run database migrations:**
+    This will set up the database schema based on `prisma/schema.prisma`.
+    ```bash
+    npx prisma migrate dev
+    ```
 
 ## Usage
-To start the API documentation server:
+
+### Development
+To start the development server with hot-reloading:
 ```bash
-npm start
-```
-
-The server will be available at `http://localhost:3000`
-
-## API Documentation
-API documentation is available in OpenAPI/Swagger format. After starting the server, visit `/docs` endpoint to view interactive documentation.
-
-## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+npm run start
