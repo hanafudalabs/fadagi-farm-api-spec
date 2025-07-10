@@ -1,0 +1,729 @@
+openapi: 3.0.0
+info:
+  title: API Peternakan Sapi B2B - Fadagi Farm
+  description: |-
+    Spesifikasi API lengkap untuk platform investasi dan tabungan peternakan sapi B2B.
+    
+    ### Peran Pengguna:
+    - **Admin**: Mengelola seluruh platform, memonitor investor, ternak, dan transaksi.
+    - **Investor**: Melakukan investasi, menabung, dan memantau portofolio pribadi.
+
+    ### Otentikasi:
+    Semua endpoint yang ditandai dengan ikon gembok (`security`) memerlukan otentikasi Bearer Token. Dapatkan token dari endpoint `/auth/login` dan sertakan dalam header `Authorization`.
+    **Format:** `Authorization: Bearer <TOKEN>`
+  version: "2.0.0"
+
+servers:
+  - url: http://localhost:3000/api/v2
+    description: Server Development Lokal
+  - url: https://api.fadagifarm.com/v2
+    description: Server Produksi
+
+tags:
+  - name: Authentication
+    description: Registrasi dan Login Pengguna
+  - name: Public
+    description: Endpoint yang dapat diakses tanpa otentikasi
+  - name: Admin - Monitoring
+    description: (Hanya Admin) Endpoint untuk memonitor semua data platform
+  - name: Admin - Manajemen
+    description: (Hanya Admin) Endpoint untuk melakukan aksi manajemen (verifikasi, tambah data)
+  - name: Investor - Investasi
+    description: (Hanya Investor) Operasi terkait portofolio investasi ternak
+  - name: Investor - Tabungan
+    description: (Hanya Investor) Operasi terkait akun tabungan dana
+  - name: Investor - Umum
+    description: (Hanya Investor) Operasi umum seperti profil dan referral
+
+paths:
+  # ===================================================================
+  # --- Authentication ---
+  # ===================================================================
+  /auth/register:
+    post:
+      tags: [ Authentication ]
+      summary: Registrasi Investor Baru
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: User berhasil dibuat. Mengembalikan data user baru.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Input tidak valid (password lemah, email salah format, kode referral tidak ada).
+        '409':
+          description: Email sudah terdaftar.
+
+  /auth/login:
+    post:
+      tags: [ Authentication ]
+      summary: Login Pengguna
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+      responses:
+        '200':
+          description: Login berhasil. Mengembalikan JWT token.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string, example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
+        '401':
+          description: Email atau password salah.
+
+  /auth/me:
+    get:
+      tags: [ Authentication ]
+      summary: Mendapatkan Profil Pengguna yang Sedang Login
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Data pengguna yang sedang login.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Tidak terotentikasi.
+
+  # ===================================================================
+  # --- Public ---
+  # ===================================================================
+  /cattle/available:
+    get:
+      tags: [ Public ]
+      summary: Melihat Daftar Sapi yang Tersedia untuk Investasi
+      responses:
+        '200':
+          description: Daftar sapi yang tersedia.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cattle'
+
+  # ===================================================================
+  # --- Admin - Monitoring ---
+  # ===================================================================
+  /admin/investors:
+    get:
+      tags: [ Admin - Monitoring ]
+      summary: (Admin) Mendapatkan Semua Daftar Investor
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Sukses.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan (bukan admin)' }
+
+  /admin/investors/{userId}:
+    get:
+      tags: [ Admin - Monitoring ]
+      summary: (Admin) Melihat Detail Lengkap Seorang Investor
+      description: Mendapatkan profil, daftar investasi, tabungan, dan transaksi milik seorang investor.
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Detail lengkap investor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminInvestorDetailResponse'
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan' }
+        '404': { description: 'Investor tidak ditemukan' }
+
+  /admin/transactions:
+    get:
+      tags: [ Admin - Monitoring ]
+      summary: (Admin) Melihat Semua Transaksi di Platform
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [ PENDING, COMPLETED, FAILED ] }
+        - in: query
+          name: type
+          schema: { type: string, enum: [ INVESTMENT_DEPOSIT, PROFIT_PAYOUT, SAVING_DEPOSIT, SAVING_WITHDRAWAL, REFERRAL_COMMISSION, GENERAL_WITHDRAWAL ] }
+      responses:
+        '200':
+          description: Daftar semua transaksi.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan' }
+
+  # ===================================================================
+  # --- Admin - Manajemen ---
+  # ===================================================================
+  /admin/cattle:
+    post:
+      tags: [ Admin - Manajemen ]
+      summary: (Admin) Menambahkan Data Sapi Baru
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CattleCreate'
+      responses:
+        '201':
+          description: Sapi berhasil ditambahkan.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Cattle' } } }
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan' }
+
+  /admin/cattle/{cattleId}/updates:
+    post:
+      tags: [ Admin - Manajemen ]
+      summary: (Admin) Menambahkan Laporan Perkembangan Sapi
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: cattleId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CattleUpdateCreate'
+      responses:
+        '201':
+          description: Laporan perkembangan berhasil ditambahkan.
+          content: { application/json: { schema: { $ref: '#/components/schemas/CattleUpdate' } } }
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan' }
+
+  /admin/transactions/{transactionId}/verify:
+    patch:
+      tags: [ Admin - Manajemen ]
+      summary: (Admin) Memverifikasi Transaksi yang Tertunda
+      description: Digunakan untuk menyetujui deposit investasi atau tabungan yang statusnya masih PENDING.
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: transactionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Transaksi berhasil diverifikasi.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Transaction' } } }
+        '400': { description: 'Transaksi tidak dapat diverifikasi (misal: sudah selesai)' }
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan' }
+        '404': { description: 'Transaksi tidak ditemukan' }
+
+  # ===================================================================
+  # --- Investor - Investasi ---
+  # ===================================================================
+  /investor/investments:
+    get:
+      tags: [ Investor - Investasi ]
+      summary: (Investor) Melihat Semua Portofolio Investasi
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Daftar investasi milik pengguna.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Investment'
+        '401': { description: 'Tidak terotentikasi' }
+    post:
+      tags: [ Investor - Investasi ]
+      summary: (Investor) Membuat Investasi Baru
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestmentCreate'
+      responses:
+        '201':
+          description: Permintaan investasi berhasil dibuat, menunggu pembayaran. Menghasilkan transaksi PENDING.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Investment' } } }
+        '400': { description: 'Input tidak valid (misal: ternak tidak tersedia)' }
+        '401': { description: 'Tidak terotentikasi' }
+
+  /investor/investments/{investmentId}:
+    get:
+      tags: [ Investor - Investasi ]
+      summary: (Investor) Melihat Detail Satu Investasi
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: investmentId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Detail lengkap investasi.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestmentDetailResponse'
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan (bukan pemilik investasi)' }
+        '404': { description: 'Investasi tidak ditemukan' }
+
+  /investor/investments/{investmentId}/documents:
+    get:
+      tags: [ Investor - Investasi ]
+      summary: (Investor) Melihat Dokumen Terkait Investasi
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: investmentId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Daftar dokumen.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan' }
+    post:
+      tags: [ Investor - Investasi ]
+      summary: (Investor) Mengunggah Dokumen untuk Investasi
+      description: Misalnya untuk mengunggah bukti transfer.
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: investmentId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentCreate'
+      responses:
+        '201':
+          description: Dokumen berhasil diunggah.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Document' } } }
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan' }
+
+  # ===================================================================
+  # --- Investor - Tabungan ---
+  # ===================================================================
+  /investor/savings:
+    get:
+      tags: [ Investor - Tabungan ]
+      summary: (Investor) Melihat Semua Akun Tabungan
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Daftar akun tabungan beserta saldonya.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Saving'
+        '401': { description: 'Tidak terotentikasi' }
+    post:
+      tags: [ Investor - Tabungan ]
+      summary: (Investor) Membuat Akun Tabungan Baru
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavingCreate'
+      responses:
+        '201':
+          description: Akun tabungan berhasil dibuat.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Saving' } } }
+        '401': { description: 'Tidak terotentikasi' }
+
+  /investor/savings/{savingId}:
+    get:
+      tags: [ Investor - Tabungan ]
+      summary: (Investor) Melihat Detail Satu Akun Tabungan
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: savingId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Detail tabungan.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Saving' } } }
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan' }
+        '404': { description: 'Tabungan tidak ditemukan' }
+
+  /investor/savings/{savingId}/deposit:
+    post:
+      tags: [ Investor - Tabungan ]
+      summary: (Investor) Melakukan Deposit ke Akun Tabungan
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: savingId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavingDepositCreate'
+      responses:
+        '201':
+          description: Permintaan deposit berhasil, menunggu pembayaran. Menghasilkan transaksi PENDING.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Transaction' } } }
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan' }
+        '404': { description: 'Tabungan tidak ditemukan' }
+
+  /investor/savings/{savingId}/transactions:
+    get:
+      tags: [ Investor - Tabungan ]
+      summary: (Investor) Melihat Riwayat Transaksi Akun Tabungan
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: savingId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Daftar transaksi untuk tabungan ini.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+        '401': { description: 'Tidak terotentikasi' }
+        '403': { description: 'Tidak diizinkan' }
+
+  # ===================================================================
+  # --- Investor - Umum ---
+  # ===================================================================
+  /investor/profile:
+    get:
+      tags: [ Investor - Umum ]
+      summary: (Investor) Mendapatkan Profil Pengguna (termasuk data bank)
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Data profil pengguna.
+          content: { application/json: { schema: { $ref: '#/components/schemas/UserProfile' } } }
+        '401': { description: 'Tidak terotentikasi' }
+    patch:
+      tags: [ Investor - Umum ]
+      summary: (Investor) Memperbarui Profil Pengguna
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdate'
+      responses:
+        '200':
+          description: Profil berhasil diperbarui.
+          content: { application/json: { schema: { $ref: '#/components/schemas/UserProfile' } } }
+        '401': { description: 'Tidak terotentikasi' }
+
+  /investor/transactions:
+    get:
+      tags: [ Investor - Umum ]
+      summary: (Investor) Melihat Seluruh Riwayat Transaksi Pribadi
+      description: Mengambil gabungan semua transaksi (investasi, tabungan, referral) milik pengguna.
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Daftar semua transaksi.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+        '401': { description: 'Tidak terotentikasi' }
+
+  /investor/referral:
+    get:
+      tags: [ Investor - Umum ]
+      summary: (Investor) Mendapatkan Info Program Referral
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Info referral pengguna.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralInfoResponse'
+        '401': { description: 'Tidak terotentikasi' }
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # --- MODEL SCHEMAS (Based on Prisma) ---
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [ ADMIN, INVESTOR ] }
+        referralCode: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    UserResponse:
+      description: Data user yang aman ditampilkan (tanpa password).
+      allOf:
+        - $ref: '#/components/schemas/User'
+    UserProfile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        phoneNumber: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        bankName: { type: string, nullable: true }
+        accountNumber: { type: string, nullable: true }
+        userId: { type: string, format: uuid }
+    Cattle:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tagId: { type: string }
+        name: { type: string, nullable: true }
+        breed: { type: string }
+        gender: { type: string, enum: [ MALE, FEMALE ] }
+        birthDate: { type: string, format: date-time }
+        initialWeight: { type: number, format: float }
+        status: { type: string, enum: [ AVAILABLE, INVESTED, SOLD, DECEASED ] }
+    CattleUpdate:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        date: { type: string, format: date-time }
+        weight: { type: number, format: float }
+        healthNotes: { type: string }
+        photoUrl: { type: string, format: uri, nullable: true }
+    Investment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        investmentDate: { type: string, format: date-time }
+        initialAmount: { type: number, format: float }
+        projectedProfit: { type: number, format: float, nullable: true }
+        finalProfit: { type: number, format: float, nullable: true }
+        status: { type: string, enum: [ ACTIVE, COMPLETED, CANCELLED ] }
+        investorId: { type: string, format: uuid }
+    Saving:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        balance: { type: number, format: float }
+        status: { type: string, enum: [ ACTIVE, CLOSED ] }
+        createdAt: { type: string, format: date-time }
+    Transaction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        amount: { type: number, format: float }
+        type: { type: string, enum: [ INVESTMENT_DEPOSIT, PROFIT_PAYOUT, SAVING_DEPOSIT, SAVING_WITHDRAWAL, REFERRAL_COMMISSION, GENERAL_WITHDRAWAL ] }
+        status: { type: string, enum: [ PENDING, COMPLETED, FAILED ] }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        investmentId: { type: string, format: uuid, nullable: true }
+        savingId: { type: string, format: uuid, nullable: true }
+    Document:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        url: { type: string, format: uri }
+        type: { type: string, enum: [ AGREEMENT, PAYMENT_PROOF, INSURANCE_POLICY, IDENTITY_CARD, OTHER ] }
+        uploadedAt: { type: string, format: date-time }
+    Insurance:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        policyNumber: { type: string }
+        provider: { type: string }
+        coverageAmount: { type: number, format: float }
+        startDate: { type: string, format: date-time }
+        endDate: { type: string, format: date-time }
+        status: { type: string, enum: [ ACTIVE, EXPIRED, CLAIMED ] }
+    Shipment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        shippingDate: { type: string, format: date-time }
+        trackingNumber: { type: string, nullable: true }
+        address: { type: string }
+        recipientName: { type: string }
+        status: { type: string, enum: [ PROCESSING, SHIPPED, DELIVERED, CANCELLED ] }
+
+    # --- REQUEST BODY SCHEMAS ---
+    UserCreate:
+      type: object
+      required: [ name, email, password ]
+      properties:
+        name: { type: string, example: "Budi Investor" }
+        email: { type: string, format: email, example: "budi@investor.com" }
+        password: { type: string, format: password, example: "password123" }
+        referrerCode: { type: string, description: "Kode referral dari pengguna lain (opsional)", example: "cuid_xyz987", nullable: true }
+    UserLogin:
+      type: object
+      required: [ email, password ]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+    CattleCreate:
+      type: object
+      required: [ tagId, breed, gender, birthDate, initialWeight ]
+      properties:
+        tagId: { type: string, example: "ID-SAPI-001" }
+        name: { type: string, example: "Gagah", nullable: true }
+        breed: { type: string, example: "Limosin" }
+        gender: { type: string, enum: [ MALE, FEMALE ] }
+        birthDate: { type: string, format: date, example: "2023-01-15" }
+        initialWeight: { type: number, format: float, example: 350.5 }
+    CattleUpdateCreate:
+      type: object
+      required: [ weight, healthNotes ]
+      properties:
+        weight: { type: number, format: float, example: 450.2 }
+        healthNotes: { type: string, example: "Vaksinasi PMK tahap 2 selesai. Nafsu makan baik." }
+        photoUrl: { type: string, format: uri, nullable: true }
+    InvestmentCreate:
+      type: object
+      required: [ cattleId, amount ]
+      properties:
+        cattleId: { type: string, format: uuid }
+        amount: { type: number, format: float }
+    SavingCreate:
+      type: object
+      required: [ name ]
+      properties:
+        name: { type: string, example: "Tabungan Qurban 2027" }
+    SavingDepositCreate:
+      type: object
+      required: [ amount ]
+      properties:
+        amount: { type: number, format: float }
+    DocumentCreate:
+      type: object
+      required: [ name, url, type ]
+      properties:
+        name: { type: string, example: "Bukti Transfer Deposit" }
+        url: { type: string, format: uri, example: "https://s3.amazonaws.com/bucket/doc123.pdf" }
+        type: { type: string, enum: [ AGREEMENT, PAYMENT_PROOF, INSURANCE_POLICY, IDENTITY_CARD, OTHER ] }
+    ProfileUpdate:
+      type: object
+      properties:
+        phoneNumber: { type: string, example: "08123456789" }
+        address: { type: string, example: "Jl. Investasi No. 1, Jakarta" }
+        bankName: { type: string, example: "Bank Central Asia" }
+        accountNumber: { type: string, example: "1234567890" }
+
+    # --- COMPLEX RESPONSE SCHEMAS ---
+    InvestmentDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/Investment'
+        - type: object
+          properties:
+            cattles: { type: array, items: { $ref: '#/components/schemas/Cattle' } }
+            documents: { type: array, items: { $ref: '#/components/schemas/Document' } }
+            insurances: { type: array, items: { $ref: '#/components/schemas/Insurance' } }
+            shipments: { type: array, items: { $ref: '#/components/schemas/Shipment' } }
+    AdminInvestorDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/UserResponse'
+        - type: object
+          properties:
+            profile: { $ref: '#/components/schemas/UserProfile' }
+            investments: { type: array, items: { $ref: '#/components/schemas/Investment' } }
+            savings: { type: array, items: { $ref: '#/components/schemas/Saving' } }
+            transactions: { type: array, items: { $ref: '#/components/schemas/Transaction' } }
+    ReferralInfoResponse:
+      type: object
+      properties:
+        myReferralCode: { type: string, example: "cuid_abcde12345" }
+        referredUsers:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              email: { type: string }
+              joinDate: { type: string, format: date-time }
+        totalCommission: { type: number, format: float, example: 500000 }
