@@ -1,6 +1,7 @@
-##  Fadagi Farm API - To-Do List
+## Fadagi Farm API - Project Backlog
 
-Berikut adalah daftar tugas pengembangan API berdasarkan spesifikasi OpenAPI v2.0.0.
+Berikut adalah daftar pekerjaan yang perlu diimplementasikan untuk API Fadagi Farm, berdasarkan spesifikasi OpenAPI
+v2.0.0.
 
 ### ✅ **Phase 1: Authentication & Core Setup (Selesai)**
 
@@ -34,8 +35,8 @@ Ini adalah fitur-fitur utama yang akan digunakan oleh investor.
     -   [ ] Unit Test: Membuat, mengambil, dan memperbarui profil.
 -   [ ] **Investor Investments: `POST /investor/investments`**
     -   [ ] Implementasi endpoint untuk membuat investasi baru.
-        -   Logika: Mengubah status ternak menjadi `INVESTED`.
-        -   Logika: Membuat `Transaction` baru dengan status `PENDING`.
+        - Logika: Mengubah status ternak menjadi `INVESTED`.
+        - Logika: Membuat `Transaction` baru dengan status `PENDING`.
     -   [ ] Unit Test: Sukses membuat permintaan investasi.
     -   [ ] Unit Test: Gagal jika ternak tidak `AVAILABLE`.
 -   [ ] **Investor Investments: `GET /investor/investments`**
